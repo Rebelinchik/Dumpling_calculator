@@ -38,6 +38,7 @@ quantity_selection = ReplyKeyboardMarkup(
             KeyboardButton(text="39"),
             KeyboardButton(text="40"),
         ],
+        [KeyboardButton(text="2200")],
         [KeyboardButton(text="В главное меню")],
     ],
     resize_keyboard=True,

@@ -1,14 +1,16 @@
 import asyncio
 import os
 
+from aiogram.fsm.context import FSMContext
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from dotenv import load_dotenv
 
 from logging_bot import logger
 from keyboard_bot import start_work, main_menu, quantity_selection
-from sql import current_pay, new_period, close_period
+from sql import current_pay, new_entry, new_period, close_period
 from scripts import date
+from memory import MemoryBot
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -23,7 +25,7 @@ class TelegramBot:
         self.start_work = start_work
         self.main_menu = main_menu
         self.quantity_selection = quantity_selection
-
+        # register handlers
         self.register_handler()
 
     def register_handler(self):
@@ -32,7 +34,8 @@ class TelegramBot:
         self.dp.message.register(self.new_period_main, F.text == "Начать период")
         self.dp.message.register(self.close_period_main, F.text == "Закончить период")
         self.dp.message.register(self.current_pay_main, F.text == "Текущий заработок")
-        # self.dp.message.register(self.new_entry_main, F.text == "Начать запись дня")
+        self.dp.message.register(self.new_entry_main, F.text == "Начать запись дня")
+        self.dp.message.register(self.get_entry, MemoryBot.wait_res)
         self.dp.message.register(self.other_text)
 
     ##Start
@@ -79,6 +82,7 @@ class TelegramBot:
                 f"При попытке закончить период пользователем {id} произошла ошибка: {e}"
             )
 
+    # Промежуточный заработок
     async def current_pay_main(self, message: types.Message):
         try:
             id = message.from_user.id
@@ -88,6 +92,52 @@ class TelegramBot:
         except Exception as e:
             logger.error(
                 f"Ошибка в main при попытке пользователя {id} вывести промежуточный заработок: {e}"
+            )
+
+    # Начало добовления записи
+    async def new_entry_main(self, message: types.Message, state: FSMContext):
+        logger.info(
+            f"Пользователь {message.from_user.id} начал запись нового дня в периоде"
+        )
+        await message.answer(
+            f"{message.from_user.username}, выбери нужное количество изготовленной продукции:",
+            reply_markup=self.quantity_selection,
+        )
+        await state.set_state(MemoryBot.wait_res)
+
+    # Конец добовления записи
+    async def get_entry(self, message: types.Message, state: FSMContext):
+        weight = [str(i) for i in range(29, 41)]
+        bid = "2200"
+        text = message.text
+        if text in weight:
+            new_entry(int(message.from_user.id), int(text))
+            await message.answer(
+                f"Твой результат добавлен в период и составляет {int(text) * 70} + 200",
+                reply_markup=self.main_menu,
+            )
+            await state.clear()
+            logger.info(
+                f"Пользователь {message.from_user.id} успешно закончил добавление результата в период"
+            )
+        elif text in bid:
+            new_entry(int(message.from_user.id), int(text))
+            await message.answer(
+                f"Твой результат добавлен в период и составляет {int(text)}",
+                reply_markup=self.main_menu,
+            )
+            await state.clear()
+            logger.info(
+                f"Пользователь {message.from_user.id} успешно закончил добавление результата в период"
+            )
+        else:
+            await message.reply(
+                "В этом сообщении нет нужной команды, запись рабочего дня прервана.",
+                reply_markup=self.main_menu,
+            )
+            await state.clear()
+            logger.info(
+                f"Пользователь {message.from_user.id} закончил добавление желания неудачно"
             )
 
     ##прием разного текста

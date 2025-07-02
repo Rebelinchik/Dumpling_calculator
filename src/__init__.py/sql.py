@@ -51,8 +51,32 @@ def new_period(id: int):
 
 
 ##внесение дневного заработка
-def new_entry(id: int, score: int):
-    pass
+def new_entry(id: int, text: int):
+    try:
+        with connect_db as conn:
+            cur = conn.cursor()
+            cur.execute(f"SELECT total FROM a{id}")
+            row = cur.fetchone()
+
+            if row is None:
+                raise ValueError(f"Пользователь с ID {id} не найден")
+
+            total = row[0]
+
+            if text == 2200:
+                new_total = total + text
+            else:
+                new_total = total + ((text * 70) + 200)
+
+            cur.execute(f"UPDATE a{id} SET total = ? WHERE id = ?", (new_total, id))
+            conn.commit()  # Добавление commit для сохранения изменений
+
+            logger.info(f"Пользователь {id} успешно добавил дневной заработок")
+
+    except Exception as e:
+        logger.error(
+            f"При попытке пользователя {id} добавить дневной заработок произошла ошибка: {e}"
+        )
 
 
 ##считывание итогового заработка и удаление таблицы
