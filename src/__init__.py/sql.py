@@ -10,6 +10,25 @@ db_path = os.getenv("SQL_FOLDER")
 connect_db = sqlite3.connect(db_path)
 
 
+##Проверка на наличие таблицы пользователя
+def ischek_table(id: int) -> bool:
+    try:
+        table_name = f"a{str(id)}"
+        with connect_db as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,),
+            )
+            result = cur.fetchone() is not None
+            logger.info(f"При проверка наличия таблицы {result}")
+            return result
+    except Exception as e:
+        logger.error(
+            f"При проверке наличия таблицы {f"a{str(id)}"} произошла ошибка: {e}"
+        )
+
+
 ##создание таблицы
 def create_table(id: int):
     try:

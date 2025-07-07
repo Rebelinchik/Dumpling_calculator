@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from logging_bot import logger
 from keyboard_bot import start_work, main_menu, quantity_selection
-from sql import current_pay, new_entry, new_period, close_period
+import sql
 from scripts import date
 from memory import MemoryBot
 
@@ -55,55 +55,69 @@ class TelegramBot:
 
     ##запуск нового периода.
     ##Создание новой таблицы с именем id пользователя
+    ##Проверка на наличие таблицы пользователя
     async def new_period_main(self, message: types.Message):
         id = int(message.from_user.id)
-        try:
-            new_period(id)
-            logger.info(f"Создание нового периода пользователем {id}")
-            await message.answer(
-                f"{message.from_user.username}, запущен новый период {date()}."
-            )
-        except Exception as e:
-            logger.error(
-                f"При создании периода в main пользователем {id} произошла ошибка; {e}"
-            )
+        if sql.ischek_table(id):
+            await message.answer("Период уже идет.\nСначала закончи текущий период.")
+        else:
+            try:
+                sql.new_period(id)
+                logger.info(f"Создание нового периода пользователем {id}")
+                await message.answer(
+                    f"{message.from_user.username}, запущен новый период {date()}."
+                )
+            except Exception as e:
+                logger.error(
+                    f"При создании периода в main пользователем {id} произошла ошибка; {e}"
+                )
 
     ##Выведение итогов периода и удаление таблицы
     async def close_period_main(self, message: types.Message):
         id = int(message.from_user.id)
-        try:
-            total = close_period(id)
-            await message.answer(
-                f"{message.from_user.username}, на {date()} твой заработок составил {total}.\nПериод закрыт."
-            )
-            logger.info(f"Пользователь {id} закрыл период")
-        except Exception as e:
-            logger.error(
-                f"При попытке закончить период пользователем {id} произошла ошибка: {e}"
-            )
+        if not sql.ischek_table(id):
+            await message.answer("Твоей таблицы нет\nСначала нужно начать период")
+        else:
+            try:
+                total = sql.close_period(id)
+                await message.answer(
+                    f"{message.from_user.username}, на {date()} твой заработок составил {total}.\nПериод закрыт."
+                )
+                logger.info(f"Пользователь {id} закрыл период")
+            except Exception as e:
+                logger.error(
+                    f"При попытке закончить период пользователем {id} произошла ошибка: {e}"
+                )
 
     # Промежуточный заработок
     async def current_pay_main(self, message: types.Message):
-        try:
-            id = message.from_user.id
-            current = current_pay(int(id))
-            await message.answer(f"Заработок на {date()} составляет {current}")
-            logger.info(f"Пользователь {id} вывел промежуточный заработок")
-        except Exception as e:
-            logger.error(
-                f"Ошибка в main при попытке пользователя {id} вывести промежуточный заработок: {e}"
-            )
+        id = message.from_user.id
+        if not sql.ischek_table(id):
+            await message.answer("Твоей таблицы нет\nСначала нужно начать период")
+        else:
+            try:
+                current = sql.current_pay(int(id))
+                await message.answer(f"Заработок на {date()} составляет {current}")
+                logger.info(f"Пользователь {id} вывел промежуточный заработок")
+            except Exception as e:
+                logger.error(
+                    f"Ошибка в main при попытке пользователя {id} вывести промежуточный заработок: {e}"
+                )
 
     # Начало добовления записи
     async def new_entry_main(self, message: types.Message, state: FSMContext):
-        logger.info(
-            f"Пользователь {message.from_user.id} начал запись нового дня в периоде"
-        )
-        await message.answer(
-            f"{message.from_user.username}, выбери нужное количество изготовленной продукции:",
-            reply_markup=self.quantity_selection,
-        )
-        await state.set_state(MemoryBot.wait_res)
+        id = message.from_user.id
+        if not sql.ischek_table(id):
+            await message.answer("Твоей таблицы нет\nСначала нужно начать период")
+        else:
+            logger.info(
+                f"Пользователь {message.from_user.id} начал запись нового дня в периоде"
+            )
+            await message.answer(
+                f"{message.from_user.username}, выбери нужное количество изготовленной продукции:",
+                reply_markup=self.quantity_selection,
+            )
+            await state.set_state(MemoryBot.wait_res)
 
     # Конец добовления записи
     async def get_entry(self, message: types.Message, state: FSMContext):
@@ -111,7 +125,7 @@ class TelegramBot:
         bid = "2200"
         text = message.text
         if text in weight:
-            new_entry(int(message.from_user.id), int(text))
+            sql.new_entry(int(message.from_user.id), int(text))
             await message.answer(
                 f"Твой результат добавлен в период и составляет {int(text) * 70} + 200",
                 reply_markup=self.main_menu,
@@ -121,7 +135,7 @@ class TelegramBot:
                 f"Пользователь {message.from_user.id} успешно закончил добавление результата в период"
             )
         elif text in bid:
-            new_entry(int(message.from_user.id), int(text))
+            sql.new_entry(int(message.from_user.id), int(text))
             await message.answer(
                 f"Твой результат добавлен в период и составляет {int(text)}",
                 reply_markup=self.main_menu,
